@@ -37,13 +37,13 @@ http://10.5.113.80:9005/pdfview2/?pdf=1729740071705391104.pdf&userid=56NOE6vGSfz
 
 2、为了避免pdf文档以图片形式展示，所以通过iframe嵌套展示，但是要对传递的关键词进行encodeURIComponent编码
 
-<iframe :src="src" frameborder="0" width="100%" height="100%" id="pdf-view"></iframe>
-
-this.src = web/viewer.html?keyword=' + encodeURIComponent(this.keyword) + '&file=' + res.url
+    <iframe :src="src" frameborder="0" width="100%" height="100%" id="pdf-view"></iframe>
+    
+    this.src = web/viewer.html?keyword=' + encodeURIComponent(this.keyword) + '&file=' + res.url
 
 3、从pid获取关键词，如果文字太长，截取前500个字符
 
-getKeywordFromPid(origin,query).then(response => {
+    getKeywordFromPid(origin,query).then(response => {
               this.loading = false
                 let resResult = JSON.parse(response)
                 let queryText = ""
@@ -147,17 +147,63 @@ getKeywordFromPid(origin,query).then(response => {
 
 匹配一个或多个空白字符,包括空格、制表符、换行符等
 
-convertToRegExpString(query, hasDiacritics) {
-    const {
-      matchDiacritics
-    } = this.#state;
-    let isUnicode = false;
-    //多个关键词开始
-    if(query.includes("|||")) {
-      let processedQueries = [];
-      let queries = query.split("|||")
-      queries.forEach(query => {
-        query = query.split("").join(" ");
+    convertToRegExpString(query, hasDiacritics) {
+        const {
+          matchDiacritics
+        } = this.#state;
+        let isUnicode = false;
+        //多个关键词开始
+        if(query.includes("|||")) {
+          let processedQueries = [];
+          let queries = query.split("|||")
+          queries.forEach(query => {
+            query = query.split("").join(" ");
+            query = query.replaceAll(SPECIAL_CHARS_REG_EXP, (match, p1, p2, p3, p4, p5) => {
+              if (p1) {
+                return `[ ]*\\${p1}[ ]*`;
+              }
+              if (p2) {
+                return `[ ]*${p2}[ ]*`;
+              }
+              if (p3) {
+                return "[ ]*";
+              }
+              if (matchDiacritics) {
+                return p4 || p5;
+              }
+              if (p4) {
+                return DIACRITICS_EXCEPTION.has(p4.charCodeAt(0)) ? p4 : "";
+              }
+              if (hasDiacritics) {
+                isUnicode = true;
+                return `${p5}\\p{M}*`;
+              }
+              return p5;
+            });
+    
+            const trailingSpaces = "[ ]*";
+            if (query.endsWith(trailingSpaces)) {
+              query = query.slice(0, query.length - trailingSpaces.length);
+            }
+    
+            if (matchDiacritics && hasDiacritics) {
+              DIACRITICS_EXCEPTION_STR ||= String.fromCharCode(...DIACRITICS_EXCEPTION);
+              isUnicode = true;
+              query = `${query}(?=[${DIACRITICS_EXCEPTION_STR}]|[^\\p{M}]|$)`;
+            }
+    
+            processedQueries.push(query);
+          });
+    
+          let combinedQuery = processedQueries.join("|"); // 匹配任意一个关键词
+          // let combinedQuery = processedQueries.map(q => `(?=.*${q})`).join(""); // 匹配所有关键词
+          return [isUnicode, combinedQuery];
+        }
+        //多个关键词结束
+        
+        // 新增把每一个字符中间都加上空格[ ]*
+        query= query.split("").join(" ")
+        // 结束
         query = query.replaceAll(SPECIAL_CHARS_REG_EXP, (match, p1, p2, p3, p4, p5) => {
           if (p1) {
             return `[ ]*\\${p1}[ ]*`;
@@ -165,6 +211,9 @@ convertToRegExpString(query, hasDiacritics) {
           if (p2) {
             return `[ ]*${p2}[ ]*`;
           }
+          // if (p3) {
+          //   return "[ ]+";
+          // }
           if (p3) {
             return "[ ]*";
           }
@@ -180,69 +229,20 @@ convertToRegExpString(query, hasDiacritics) {
           }
           return p5;
         });
-
         const trailingSpaces = "[ ]*";
         if (query.endsWith(trailingSpaces)) {
           query = query.slice(0, query.length - trailingSpaces.length);
         }
-
-        if (matchDiacritics && hasDiacritics) {
-          DIACRITICS_EXCEPTION_STR ||= String.fromCharCode(...DIACRITICS_EXCEPTION);
-          isUnicode = true;
-          query = `${query}(?=[${DIACRITICS_EXCEPTION_STR}]|[^\\p{M}]|$)`;
+        if (matchDiacritics) {
+          if (hasDiacritics) {
+            DIACRITICS_EXCEPTION_STR ||= String.fromCharCode(...DIACRITICS_EXCEPTION);
+            isUnicode = true;
+            query = `${query}(?=[${DIACRITICS_EXCEPTION_STR}]|[^\\p{M}]|$)`;
+          }
         }
-
-        processedQueries.push(query);
-      });
-
-      let combinedQuery = processedQueries.join("|"); // 匹配任意一个关键词
-      // let combinedQuery = processedQueries.map(q => `(?=.*${q})`).join(""); // 匹配所有关键词
-      return [isUnicode, combinedQuery];
-    }
-    //多个关键词结束
-    
-    // 新增把每一个字符中间都加上空格[ ]*
-    query= query.split("").join(" ")
-    // 结束
-    query = query.replaceAll(SPECIAL_CHARS_REG_EXP, (match, p1, p2, p3, p4, p5) => {
-      if (p1) {
-        return `[ ]*\\${p1}[ ]*`;
+        
+        return [isUnicode, query];
       }
-      if (p2) {
-        return `[ ]*${p2}[ ]*`;
-      }
-      // if (p3) {
-      //   return "[ ]+";
-      // }
-      if (p3) {
-        return "[ ]*";
-      }
-      if (matchDiacritics) {
-        return p4 || p5;
-      }
-      if (p4) {
-        return DIACRITICS_EXCEPTION.has(p4.charCodeAt(0)) ? p4 : "";
-      }
-      if (hasDiacritics) {
-        isUnicode = true;
-        return `${p5}\\p{M}*`;
-      }
-      return p5;
-    });
-    const trailingSpaces = "[ ]*";
-    if (query.endsWith(trailingSpaces)) {
-      query = query.slice(0, query.length - trailingSpaces.length);
-    }
-    if (matchDiacritics) {
-      if (hasDiacritics) {
-        DIACRITICS_EXCEPTION_STR ||= String.fromCharCode(...DIACRITICS_EXCEPTION);
-        isUnicode = true;
-        query = `${query}(?=[${DIACRITICS_EXCEPTION_STR}]|[^\\p{M}]|$)`;
-      }
-    }
-    
-    return [isUnicode, query];
-  }
   
 6、根据正则匹配查找，返回关键词位置信息
 
