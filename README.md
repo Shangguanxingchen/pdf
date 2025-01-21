@@ -1,20 +1,30 @@
 一、接口对接
+
 使用url的query传参
+
 参数一：pdf：文件名 -必传
+
 参数二：userid：水印文字 -必传 -aes加密
 key = "0F57136741CC46C49612942E093E7711"
 iv = "HQti4TAfQIU08GME"
 Mode = CBC,
 Padding = Pkcs7
+
 参数三：title: 文件的title -选传
+
 参数四：keyword: 高亮的关键词 -选传
+
   例如：
   keyword=出口对就业拉动 -纯文本类型
   keyword=5592811_1782086423080472576_0 -pid类型
+  
 完整url示例：
 http://10.5.113.80:9005/pdfview2/?pdf=1729740071705391104.pdf&userid=56NOE6vGSfzQPzDuGA6LJqxfNO/Zg0fb+KubAIeH9zQ=&title=关于修订《华夏基金管理有限公司员工培训管理办法》的通知&keyword=5592811_1782086423080472576_0
+
 二、技术主要实现
+
 1、前端从浏览器地址中获取必要的参数，比如关键词等
+
       const url = window.location.href
       const newUrl = new URL(url.replace(/\+/g, '%2B'))
       const pdfFileName = newUrl.searchParams.get('pdf')
@@ -22,12 +32,17 @@ http://10.5.113.80:9005/pdfview2/?pdf=1729740071705391104.pdf&userid=56NOE6vGSfz
       this.userid = decrypt(newUrl.searchParams.get('userid'))
       this.title = newUrl.searchParams.get('title')
       this.keyword = newUrl.searchParams.get('keyword')
+      
 注意事项：目前浏览器会把符号“+”转义成空格，所以要把+提前替换成“%2B”
+
 2、为了避免pdf文档以图片形式展示，所以通过iframe嵌套展示，但是要对传递的关键词进行encodeURIComponent编码
+
 <iframe :src="src" frameborder="0" width="100%" height="100%" id="pdf-view"></iframe>
 
 this.src = web/viewer.html?keyword=' + encodeURIComponent(this.keyword) + '&file=' + res.url
+
 3、从pid获取关键词，如果文字太长，截取前500个字符
+
 getKeywordFromPid(origin,query).then(response => {
               this.loading = false
                 let resResult = JSON.parse(response)
@@ -40,8 +55,10 @@ getKeywordFromPid(origin,query).then(response => {
                 }
                 this.src = '/pdfview2/pdfjs-3.10.111-dist/web/viewer.html?keyword=' + encodeURIComponent(queryText) + '&file=' + res.url
                 document.title = this.title
+                
 
 4、获取关键词，传递到高亮搜索输入框，支持多个关键词及匹配不上的时候适当缩短关键词
+
     initializeKeywordHighlight();
   
     function initializeKeywordHighlight() {
@@ -123,9 +140,13 @@ getKeywordFromPid(origin,query).then(response => {
 
 
 5、通过正则匹配关键词
+
 分割所有的关键词，之间添加空格；
+
 转义在正则表达式中有特殊含义的元字符，给左右两边添加0到多个空格匹配任何 Unicode 标点符号字符，给左右两边添加0到多个空格
+
 匹配一个或多个空白字符,包括空格、制表符、换行符等
+
 convertToRegExpString(query, hasDiacritics) {
     const {
       matchDiacritics
@@ -222,25 +243,26 @@ convertToRegExpString(query, hasDiacritics) {
     
     return [isUnicode, query];
   }
+  
 6、根据正则匹配查找，返回关键词位置信息
-calculateRegExpMatch(query, entireWord, pageIndex, pageContent) {
-    const matches = this._pageMatches[pageIndex] = [];
-    const matchesLength = this._pageMatchesLength[pageIndex] = [];
-    if (!query) {
-      return;
-    }
-    const diffs = this._pageDiffs[pageIndex];
-    let match;
-    while ((match = query.exec(pageContent)) !== null) {
-      if (entireWord && !this.#isEntireWord(pageContent, match.index, match[0].length)) {
-        continue;
-      }
 
-      const [matchPos, matchLen] = getOriginalIndex(diffs, match.index, match[0].length);
-      if (matchLen) {
-        matches.push(matchPos);
-        matchesLength.push(matchLen);
+    calculateRegExpMatch(query, entireWord, pageIndex, pageContent) {
+        const matches = this._pageMatches[pageIndex] = [];
+        const matchesLength = this._pageMatchesLength[pageIndex] = [];
+        if (!query) {
+          return;
+        }
+        const diffs = this._pageDiffs[pageIndex];
+        let match;
+        while ((match = query.exec(pageContent)) !== null) {
+          if (entireWord && !this.#isEntireWord(pageContent, match.index, match[0].length)) {
+            continue;
+          }
+    
+          const [matchPos, matchLen] = getOriginalIndex(diffs, match.index, match[0].length);
+          if (matchLen) {
+            matches.push(matchPos);
+            matchesLength.push(matchLen);
+          }
+        }
       }
-    }
-  }
-
